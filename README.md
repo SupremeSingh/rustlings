@@ -310,6 +310,7 @@ As an aside for the purposes of debugging, `#[derive(Debug)]` is an annotation t
 
 - `#[derive(PartialEq)]` to compare structs using `==` and `!=`
 - `#[derive(Copy, Clone)]` to copy structs using `let rect2 = rect1;` instead of `let rect2 = &rect1;`
+- `#[derive(Hash)]` to use structs as keys in a `HashMap`
 
 ### Associated Functions
 
@@ -379,3 +380,179 @@ fn value_in_cents(coin: Coin) -> u8 {
 ```
 
 The match statement basically says "match the value of `coin` to one of the values in the enum `Coin` and run the code associated with that value".
+
+## Section 10 - Strings
+
+Rust has two [string](https://doc.rust-lang.org/book/ch08-02-strings.html) types, a string slice (`&str`) and an owned string (`String`). They are interchangeable for the most part. To declare, either you may ...
+
+```
+let slice = "hello";
+let ownder = String::from("hello");
+```
+
+There are a few useful methods that can be called on strings. For instance ... 
+
+```
+input.trim().to_string()
+input.to_string() + " " + world
+input.replace("cars", "balloons").to_string()
+```
+
+## Section 11 - Modules
+
+Rust organizes code using a [module system](https://doc.rust-lang.org/book/ch07-00-managing-growing-projects-with-packages-crates-and-modules.html). This system allows you to group related code together in a module, and then use that module in other parts of your program. 
+
+Modules also control the privacy of items, which is whether an item can be used by outside code (public) or is an internal implementation detail and not available for outside use (private). By default, items in Rust are private. 
+
+### Defining Modules
+
+Modules are defined using the `mod` keyword. For example ...
+
+```
+mod sound {
+    mod instrument {
+        fn clarinet() {
+            // Function body code goes here
+        }
+    }
+
+    mod voice {
+        fn trill() {
+            // Function body code goes here
+        }
+    }
+}
+```
+
+### Paths
+
+Paths are used to refer to items in modules. An example of referring to one module in another using its path is ...
+
+```
+mod sound {
+    mod instrument {
+        fn clarinet() {
+            // Function body code goes here
+        }
+    }
+
+    mod voice {
+        fn trill() {
+            instrument::clarinet();
+        }
+    }
+}
+
+The `::` operator is used to separate the path segments. 
+
+### Bringing Paths into Scope with `use`
+
+The `use` keyword can be used to bring a path into scope. 
+
+```
+use std::time::{SystemTime, UNIX_EPOCH};
+```
+
+### Separating Modules into Different Files
+
+Modules can be separated into different files. For example, the `sound` module can be separated into `sound.rs` and `instrument.rs` files. The `instrument.rs` file would look like ...
+
+### The `super` Keyword 
+
+The `super` keyword is used to refer to the parent module. For example ...
+
+```
+mod sound {
+    mod instrument {
+        fn clarinet() {
+            // Function body code goes here
+        }
+    }
+
+    mod voice {
+        fn trill() {
+            super::instrument::clarinet();
+        }
+    }
+}
+```
+
+As opposed to this, the `self` keyword is used to refer to the current module. Further, structs and enums in a module are private by default. To make them public, use the `pub` keyword. For example ...
+
+```
+pub use self::fruits::PEAR as fruit; 
+```
+
+## Section 12 - HashMaps 
+
+A [hash map](https://doc.rust-lang.org/book/ch08-03-hash-maps.html) allows you to associate a value with a particular key. 
+
+Hashmaps can be simply declared using ... 
+
+```
+let mut basket: HashMap<String, u32> = HashMap::new();
+basket.insert(String::from("banana"), 2);
+basket.insert(String::from("apple"), 3);
+basket.insert(String::from("orange"), 4);
+```
+
+To access a value from the hashmap, pass a reference to the key ... 
+
+```
+let count = basket.get(&String::from("banana")); 
+```
+
+To iterate over the hashmap, use a for loop ... 
+
+```
+for (key, value) in &basket {
+    println!("{}: {}", key, value);
+}
+```
+
+## Section 13 - Options 
+
+Type [Option](https://doc.rust-lang.org/std/option/enum.Option.html) represents an optional value: every Option is either Some and contains a value, or None, and does not. Option types are very common in Rust code, as they have a number of uses:
+
+- Initial values
+- Return values for functions that are not defined over their entire input range (partial functions)
+- Return value for otherwise reporting simple errors, where None is returned on error
+
+Options are often also used as return values for functions that could fail for some reason. For example, the `parse` method on strings parses a string into some kind of number. If successful, it returns the number wrapped in `Some`. If unsuccessful, it returns `None`. 
+
+```
+let guess: u32 = match guess.trim().parse() {
+    Ok(num) => num,
+    Err(_) => continue,
+};
+```
+
+You can also convert values to options and use them for checks as ... 
+
+```
+let target = "rustlings";
+let optional_target = Some(target);
+
+if let Some(word) = optional_target {
+    assert_eq!(word, target);
+}
+```
+
+Finally, it is possible to pass a pointer to an option to a function. For example ...
+
+```
+fn print_optional(optional: &Option<String>) {
+    match optional {
+        Some(value) => println!("The value is {}", value),
+        None => println!("The value is empty"),
+    }
+}
+```
+
+
+
+
+
+
+
+
