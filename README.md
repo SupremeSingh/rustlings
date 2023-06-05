@@ -456,7 +456,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 ### Separating Modules into Different Files
 
-Modules can be separated into different files. For example, the `sound` module can be separated into `sound.rs` and `instrument.rs` files. The `instrument.rs` file would look like ...
+Modules can be separated into different files. For example, the `sound` module can be separated into `sound.rs` and `instrument.rs` files. Multiple modules are compiled into a unit called crate. Rust programs may contain a binary crate or a library crate. A binary crate is an executable project that has a main() method. 
+
+A library crate is a group of components that can be reused in other projects. Unlike a binary crate, a library crate does not have an entry point (main() method). The Cargo tool is used to manage crates in Rust. For instance ...
 
 ### The `super` Keyword 
 
@@ -550,10 +552,489 @@ fn print_optional(optional: &Option<String>) {
 }
 ```
 
+## Section 14 - Error Handling
+
+Most [errors](https://doc.rust-lang.org/book/ch09-02-recoverable-errors-with-result.html) aren’t serious enough to require the program to stop entirely. Sometimes, when a function fails, it’s for a reason that you can easily interpret and respond to. For example, if you try to open a file and that operation fails because the file doesn’t exist, you might want to create the file instead of terminating the process.
 
 
+### Result Type
 
+The `Result` type is an enum defined as ...
 
+```
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+```
 
+The `T` and `E` are generic type parameters. The `T` represents the type of the value that will be returned in a success case within the `Ok` variant, and the `E` represents the type of the error that will be returned in a failure case within the `Err` variant. For example ... 
 
+Usually, a function which returns generic type `T` will return `Result<T, E>` and will have the following signature ...
+
+```
+fn do_something() -> Result<T, E> {
+    // Function body code goes here
+}
+```
+
+Where `E` can take different error types for instance it can be `ParseIntError` or even `ParseFloatError` and so on. Any type that implements the `std::error::Error` trait can be used as an error type. Further, to force a function to return an `OK` value, you can simply terminate it with `Ok(())`.
+
+ `Ok(())` is the same as `Ok(Ok(()))` which is the same as `Ok(Result<(), ParseIntError>)`.
+
+### The `?` Operator
+
+The `?` operator can be used to propagate errors. For example ...
+
+```
+fn main() -> Result<(), ParseIntError> {
+    let number_str = "10";
+    let number = match number_str.parse::<i32>() {
+        Ok(number) => number,
+        Err(e) => return Err(e),
+    };
+    println!("{}", number);
+    Ok(())
+}
+```
+
+The above code can be simplified as ...
+
+```
+fn main() -> Result<(), ParseIntError> {
+    let number_str = "10";
+    let number = number_str.parse::<i32>()?;
+    println!("{}", number);
+    Ok(())
+}
+```
+
+The `?` operator can only be used in functions that return `Result` or `Option`. 
+
+### The `?` Operator and `main()`
+
+The `?` operator can be used in the `main()` function. For example ...
+
+```
+fn main() -> Result<(), Box<dyn Error>> {
+    let number_str = "10";
+    let number = number_str.parse::<i32>()?;
+    println!("{}", number);
+    Ok(())
+}
+```
+
+The `main()` function returns `Result<(), Box<dyn Error>>` which means that it returns `Ok(())` or `Err(Box<dyn Error>)`. The `?` operator can be used to propagate errors.
+
+### The `map_err()` Method
+
+The `map_err()` method can be used to convert an error type to another error type. For example ...
+
+```
+fn main() -> Result<(), Box<dyn Error>> {
+    let number_str = "10";
+    let number = number_str.parse::<i32>().map_err(|e| ParseIntError::from(e))?;
+    println!("{}", number);
+    Ok(())
+}
+```
+
+The `map_err()` method takes a closure as an argument. The closure takes an error as an argument and returns a new error. The `?` operator can be used to propagate errors.
+
+### The Box Type
+
+The [Box](https://doc.rust-lang.org/std/boxed/struct.Box.html) type is a smart pointer type. It is used to store data on the heap. For example ...
+
+```
+let x = 5;
+let y = Box::new(x);
+```
+
+The `y` variable is a box that points to the value `5` on the heap. The `x` variable is stored on the stack. 
+
+## Section 15 - Generics 
+
+[Generics](https://doc.rust-lang.org/stable/book/ch10-01-syntax.html) is the topic of generalizing types and functionalities to broader cases. This is extremely useful for reducing code duplication in many ways, but can call for rather involving syntax. Namely, being generic requires taking great care to specify over which types a generic type is actually considered valid. 
+
+The simplest and most common use of generics is for type parameters.
+
+```
+struct Point<T> {
+    x: T,
+    y: T,
+}
+```
+
+The above code defines a struct named `Point` that has a field `x` and a field `y`. The `x` and `y` fields have the same type `T`. The `T` is a generic type parameter. The `T` can be any type. For example ...
+
+```
+let integer = Point { x: 5, y: 10 };
+let float = Point { x: 1.0, y: 4.0 };
+```
+
+A more concrete example would be something like ...
+
+```
+struct Wrapper<T> {
+    value: T,
+}
+
+impl<T> Wrapper<T> {
+    pub fn new(value: T) -> Self {
+        Wrapper { value }
+    }
+}
+```
+
+### Displaying Generics 
+
+The `Display` trait can be used to display a generic type. For example ...
+
+```
+use std::fmt::Display;
+
+struct Wrapper<T> {
+    value: T,
+}
+
+impl<T: Display> Wrapper<T> {
+    pub fn print(&self) {
+        println!("{}", self.value);
+    }
+}
+
+fn main() {
+    let w = Wrapper { value: 5 };
+    w.print();
+}
+```
+
+## Section 16 - Traits
+
+A [trait](https://doc.rust-lang.org/book/ch10-02-traits.html) is a collection of methods.
+
+Data types can implement traits. To do so, the methods making up the trait are defined for the data type. For example, the `String` data type implements the `From<&str>` trait. This allows a user to write `String::from("hello")`.
+
+In this way, traits are somewhat similar to Java interfaces and C++ abstract classes.
+
+Some additional common Rust traits include:
+
+- `Clone` (the `clone` method)
+- `Display` (which allows formatted display via `{}`)
+- `Debug` (which allows formatted display via `{:?}`)
+
+Because traits indicate shared behavior between data types, they are useful when writing generics. The `#derive()` attribute can be used to automatically implement some traits for a data type. For example, the `Debug` trait can be automatically implemented for a data type by writing `#[derive(Debug)]` above the data type definition.
+
+```
+#[derive(Debug)]
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+```
+
+The difference between self and Self is that self is a reference to the current instance of the struct, whereas Self is the type name of the current struct.
+
+### Privacy and Traits
+
+By default, trait methods are private. When defining a trait, it can be made public or private. For example ...
+
+```
+pub trait Summary {
+    fn summarize(&self) -> String;
+}
+```
+
+### Selecting Data Type based on Trait 
+
+A function can take a generic type parameter that implements a trait. For example ...
+
+```
+fn notify(item: impl Summary) {
+    println!("Breaking news! {}", item.summarize());
+}
+```
+
+The `impl Summary` syntax means that the `item` parameter must be a data type that implements the `Summary` trait. You can even define a function that takes multiple generic type parameters that implement the same trait. For example ...
+
+```
+fn notify<T: Summary>(item1: T, item2: T) {
+    println!("Breaking news! {}", item1.summarize());
+    println!("Breaking news! {}", item2.summarize());
+}
+```
+
+And finally, to define a parameter that implements multiple traits, you can use the `+` syntax. For example ...
+
+```
+fn notify(item: impl Summary + Display) {
+    println!("Breaking news! {}", item.summarize());
+}
+```
+
+## Section 17 - Lifetimes 
+
+[Lifetimes](https://doc.rust-lang.org/book/ch10-03-lifetime-syntax.html) are a way of ensuring that references are valid as long as they are used. Rust requires that all references be valid. Lifetimes are a way of enforcing this requirement.
+
+Checking references is one of the borrow checker’s main responsibilities. Lifetimes help the borrow checker ensure that you never have invalid references. In many cases, the borrow checker can infer the correct lifetimes and take care of everything on its own. But often it needs your help to figure it out.
+
+### Lifetime Annotations
+
+Lifetime annotations are a way of telling the borrow checker how generic lifetime parameters relate to each other. For example ...
+
+```
+fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
+    if x.len() > y.len() {
+        x
+    } else {
+        y
+    }
+}
+```
+
+The `'a` syntax is a lifetime annotation. The `'a` syntax means that the lifetime of the return value is the same as the lifetime of the two parameters. To learn more about lifetime anotations, please refer to these [exercises](https://tfpk.github.io/lifetimekata/).
+
+### Lifetimes in Structs
+
+Lifetimes can be used in structs. For example ...
+
+```
+struct ImportantExcerpt<'a> {
+    part: &'a str,
+}
+
+fn main() {
+    let novel = String::from("Call me Bobby. Some years ago...");
+    let first_sentence = novel.split('.').next().expect("Could not find a '.'");
+    let i = ImportantExcerpt {
+        part: first_sentence,
+    };
+}
+```
+
+The `ImportantExcerpt` struct has a lifetime parameter `'a`. The `part` field is a reference to a string slice. The lifetime of the string slice must be the same as the lifetime of the struct.
+
+## Section 18 - Testing
+
+Rust has a built-in [testing](https://doc.rust-lang.org/book/ch11-01-writing-tests.html) framework. To write tests, you must create a `tests` directory in the same directory as the file you want to test. Then, you can write tests there. 
+
+For example, if you have a file named `adder.rs`, you can write tests in the `tests` directory in a file named `adder_test.rs`.
+
+```
+use adder;
+
+#[test]
+fn it_adds_two() {
+    assert_eq!(4, adder::add_two(2));
+}
+```
+
+The `#[test]` attribute indicates that the function is a test. The `assert_eq!` macro is used to assert that the first argument is equal to the second argument. If the two arguments are not equal, the test will fail.
+
+You can also add tests to the same file as the function you want to test. For example ...
+
+```
+pub fn add_two(a: i32) -> i32 {
+    a + 2
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_adds_two() {
+        assert_eq!(4, add_two(2));
+    }
+}
+```
+
+The `#[cfg(test)]` attribute indicates that the following code is only compiled when running tests. The `mod tests` syntax creates a module named `tests`. The `use super::*` syntax imports all items from the parent module. This allows the `add_two` function to be used in the `tests` module.
+
+### Asserting Errors
+
+You can also write tests that assert that a function returns an error. There are different types of assert statements out there. For example ...
+
+- `assert!` - asserts that the argument is true
+- `assert_eq!` - asserts that the two arguments are equal
+- `assert_ne!` - asserts that the two arguments are not equal
+- `assert_matches!` - asserts that the argument matches a pattern
+- `assert_panic!` - asserts that the argument panics
+
+And so on. 
+
+### Handling Panic
+
+When a test panics, the test fails. However, sometimes you want to test that a function panics. For example, you might want to test that a function panics when given invalid input. To do this, you can use the `should_panic` attribute. For example ...
+
+```
+#[test]
+#[should_panic(expected = "A meaningful message")]
+fn it_panics() {
+    // ...
+}
+```
+
+## Section 19 - Iterators
+
+[Iterators](https://doc.rust-lang.org/book/ch13-02-iterators.html) are a way of iterating over a collection of items. For example, you can iterate over a vector like this ...
+
+```
+let v = vec![1, 2, 3];
+
+for i in &v {
+    println!("{}", i);
+}
+```
+
+The `&` syntax is used to borrow the vector. This is because the `for` loop takes ownership of the vector. If you want to iterate over a vector without borrowing it, you can use the `into_iter` method. For example ...
+
+```
+let v = vec![1, 2, 3];
+
+for i in v.into_iter() {
+    println!("{}", i);
+}
+```
+
+The `into_iter` method returns an iterator that takes ownership of the vector. This means that the vector is moved into the iterator. If you want to iterate over a vector without moving it, you can use the `iter` method. For example ...
+
+```
+let v = vec![1, 2, 3];
+
+for i in v.iter() {
+    println!("{}", i);
+}
+```
+
+The `iter` method returns an iterator that borrows the vector. This means that the vector is not moved into the iterator. If you want to iterate over a vector and mutate it, you can use the `iter_mut` method. For example ...
+
+```
+let mut v = vec![1, 2, 3];
+
+for i in v.iter_mut() {
+    *i += 1;
+}
+```
+
+The `iter_mut` method returns an iterator that mutably borrows the vector. This means that the vector is not moved into the iterator, but it can be mutated.
+
+### Creating Iterators
+
+You can also create your own iterators. For example ...
+
+```
+struct Counter {
+    count: u32,
+}
+
+impl Counter {
+    fn new() -> Counter {
+        Counter { count: 0 }
+    }
+}
+
+impl Iterator for Counter {
+    type Item = u32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.count += 1;
+
+        if self.count < 6 {
+            Some(self.count)
+        } else {
+            None
+        }
+    }
+}
+
+fn main() {
+    let mut counter = Counter::new();
+
+    for i in counter {
+        println!("{}", i);
+    }
+}
+```
+
+The `Counter` struct has a `count` field. The `new` method returns a `Counter` struct with a `count` field set to `0`. The `next` method returns the next item in the iterator. The `next` method returns an `Option` type. 
+
+If the `next` method returns `None`, the iterator is done. If the `next` method returns `Some`, the iterator is not done. The `next` method mutates the `count` field. The `next` method returns the `count` field if the `count` field is less than `6`. Otherwise, the `next` method returns `None`.
+
+The `Iterator` trait has an associated type named `Item`. The `Item` type is the type of the items in the iterator. In this case, the `Item` type is `u32`.
+
+### Using Other Iterator Trait Methods
+
+The `Iterator` trait has many methods. For example ...
+
+- `sum` - returns the sum of the items in the iterator
+- `product` - returns the product of the items in the iterator
+- `min` - returns the minimum item in the iterator
+- `max` - returns the maximum item in the iterator
+- `count` - returns the number of items in the iterator
+- `nth` - returns the nth item in the iterator
+- `last` - returns the last item in the iterator
+- `collect` - collects the items in the iterator into a collection
+- `map` - maps the items in the iterator to another type
+- `filter` - filters the items in the iterator
+
+And so on.
+
+### Closures
+
+Closures are a way of creating functions that can be used as arguments to other functions. For example ...
+
+```
+fn add_one<F>(f: F) -> i32
+where
+    F: Fn(i32) -> i32,
+{
+    f(1)
+}
+
+fn main() {
+    let result = add_one(|x| x + 1);
+    println!("{}", result);
+}
+```
+
+The `add_one` function takes a closure as an argument. The closure takes an `i32` as an argument and returns an `i32`. The `add_one` function returns an `i32`. The `add_one` function calls the closure with `1` as an argument. The closure adds `1` to the argument and returns the result.
+
+The `add_one` function can be called with any closure that takes an `i32` as an argument and returns an `i32`. For example ...
+
+```
+fn main() {
+    let result = add_one(|x| x + 1);
+    println!("{}", result);
+
+    let result = add_one(|x| x + 2);
+    println!("{}", result);
+
+    let result = add_one(|x| x + 3);
+    println!("{}", result);
+}
+```
+### Iteration Example 
+
+A simple example of iterating over range of numbers can be found as ...
+
+```
+let mut result = 1;
+for i in 1..=num {
+    result *= i;
+}
+result
+```
+
+Another way to iterate over a collection and map changes to its items is ... 
+
+```
+let v1 = vec![1, 2, 3];
+
+let v2: Vec<_> = v1.iter().map(|x| x + 1).collect();
+```
+
+This will create a new vector `v2` with the values `[2, 3, 4]`. The `collect()` method is used to collect the items in the iterator into a collection. 
+
+The `map()` method is used to map the items in the iterator to another type. The `|x| x + 1` syntax is used to create a closure. The closure is used to map the items in the iterator to another type.
 
