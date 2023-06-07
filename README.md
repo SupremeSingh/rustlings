@@ -8,7 +8,7 @@ This repository contains my solutions to the [Rustlings](https://github.com/rust
 
 ## Section 1 - Intro
 
-The first concept to cover is that Rust is a functional programming language. The entry point to every Rust program, hence, is a `main` function.
+The first concept to cover is that Rust can be used to write functional programs. The entry point to the Rust programs, in this section at least, is a `main` function.
 
 ```
 fn main() {
@@ -458,7 +458,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 Modules can be separated into different files. For example, the `sound` module can be separated into `sound.rs` and `instrument.rs` files. Multiple modules are compiled into a unit called crate. Rust programs may contain a binary crate or a library crate. A binary crate is an executable project that has a main() method. 
 
-A library crate is a group of components that can be reused in other projects. Unlike a binary crate, a library crate does not have an entry point (main() method). The Cargo tool is used to manage crates in Rust. For instance ...
+A library crate is a group of components that can be reused in other projects. Unlike a binary crate, a library crate does not have an entry point (main() method). The Cargo tool is used to manage crates in Rust. 
 
 ### The `super` Keyword 
 
@@ -1037,4 +1037,574 @@ let v2: Vec<_> = v1.iter().map(|x| x + 1).collect();
 This will create a new vector `v2` with the values `[2, 3, 4]`. The `collect()` method is used to collect the items in the iterator into a collection. 
 
 The `map()` method is used to map the items in the iterator to another type. The `|x| x + 1` syntax is used to create a closure. The closure is used to map the items in the iterator to another type.
+
+## Section 20 - Threads
+ 
+In most current operating systems, an executed program’s code is run in a process, and the operating system manages multiple processes at once. Within your program, you can also have independent processes that run simultaneously. 
+
+(Semi) Independent processes that share some resources (like memory) are called [threads](https://doc.rust-lang.org/book/ch16-01-threads.html). Threads allow you to run multiple parts of your code in parallel, so you can do multiple tasks at the same time.
+
+### Creating a New Thread with spawn
+
+To create a new thread, we call the `thread::spawn` function and pass it a closure containing the code we want to run in the new thread. The `thread::spawn` function returns a `JoinHandle` type for the new thread. 
+
+The `JoinHandle` type is an owned value that, when we call the `join` method on it, will wait for its thread to finish.
+
+```
+use std::thread;
+
+fn main() {
+    let handle = thread::spawn(|| {
+        for i in 1..10 {
+            println!("hi number {} from the spawned thread!", i);
+        }
+    });
+
+    for i in 1..5 {
+        println!("hi number {} from the main thread!", i);
+    }
+
+    handle.join().unwrap();
+}
+```
+
+The `join` method blocks the main thread until the thread represented by the handle terminates. The `unwrap` method returns the result of the thread. If the thread panics, the `unwrap` method will panic. 
+
+### Using move Closures with Threads
+
+When we use threads, we want to move data between threads. For example ...
+
+```
+use std::thread;
+
+fn main() {
+    let v = vec![1, 2, 3];
+
+    let handle = thread::spawn(|| {
+        println!("Here's a vector: {:?}", v);
+    });
+
+    handle.join().unwrap();
+}
+```
+
+This code will not compile. This is because the compiler cannot guarantee that the main thread will outlive the spawned thread. Therefore, the compiler cannot guarantee that the closure will outlive the main thread. 
+
+If the compiler cannot guarantee that the closure will outlive the current function, it will not compile the code.
+
+To fix this, we can use the `move` keyword. For example ...
+
+```
+use std::thread;
+
+fn main() {
+    let v = vec![1, 2, 3];
+
+    let handle = thread::spawn(move || {
+        println!("Here's a vector: {:?}", v);
+    });
+
+    handle.join().unwrap();
+}
+```
+
+The `move` keyword moves the data from the main thread to the spawned thread. The `move` keyword tells the compiler that the closure will outlive the current function. 
+
+### Using Message Passing to Transfer Data Between Threads
+
+The `std::sync::mpsc` library provides a way to send messages between threads. The `mpsc` stands for multiple producer, single consumer.
+
+The `mpsc` library provides two types: `Sender` and `Receiver`. The `Sender` type is used to send messages. The `Receiver` type is used to receive messages. The `Sender` and `Receiver` types are used to create a channel. A channel is a way to send messages between threads.
+
+```
+use std::sync::mpsc;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+
+    thread::spawn(move || {
+        let val = String::from("hi");
+        tx.send(val).unwrap(); // val sent to the main thread
+    });
+
+    let received = rx.recv().unwrap(); // val received from the spawned thread
+    println!("Got: {}", received);
+}
+```
+
+The `recv` method blocks the main thread until a message is received. The `send` method blocks the spawned thread until the message is received.
+
+### Arcs
+
+The `std::sync::Arc` library provides a way to share ownership of data between threads. Arc values in Rust are designed to be shareable across multiple threads. "Arc" stands for "Atomic Reference Counted," and it provides a way to safely share ownership of a value between multiple threads.
+
+An Arc<T> wraps a value of type T and internally tracks the number of references to that value. It uses atomic operations to increment and decrement the reference count, ensuring that multiple threads can safely access and manipulate the value without causing data races or memory unsafety.
+
+### Mutexes
+
+The `std::sync::Mutex` library provides a way to share mutable data between threads. The `Mutex` library provides the `Mutex` type.
+
+Mutex stands for mutual exclusion. Mutexes allow only one thread to access some data at any given time. To access the data in a mutex, a thread must first signal that it wants access by asking to acquire the mutex’s lock. The lock is a data structure that is part of the mutex that keeps track of who currently has exclusive access to the data. 
+
+Therefore, the mutex is described as guarding the data it holds via the locking system. For example ...
+
+```
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+fn main() {
+    let counter = Arc::new(Mutex::new(0)); // Mutex is used to share data between threads
+    let mut handles = vec![];
+
+    for _ in 0..10 {
+        let counter = Arc::clone(&counter);
+        let handle = thread::spawn(move || {
+            let mut num = counter.lock().unwrap();
+
+            *num += 1;
+        });
+        handles.push(handle);
+    }
+
+    for handle in handles {
+        handle.join().unwrap();
+    }
+
+    println!("Result: {}", *counter.lock().unwrap());
+}
+```
+
+## Section 21 - Smart Pointers 
+
+In Rust, [Smart Pointers](https://doc.rust-lang.org/book/ch15-00-smart-pointers.html) are variables that contain an address in memory and reference some other data, but they also have additional metadata and capabilities. Smart pointers in Rust often own the data they point to, while references only borrow data. 
+
+### Arc 
+
+The `Arc` type is a thread-safe reference-counting pointer. "Arc" stands for "Atomic Reference Counted," and it provides a way to safely share ownership of a value between multiple threads. `Arc` is discussed in detail above. 
+
+### Box 
+
+At compile time, Rust needs to know how much space a type takes up. This becomes problematic for recursive types, such as a list. A recursive data type is any data type that contains a reference to itself. A simple example is a list ...
+
+```
+enum List {
+    Cons(i32, List),
+    Nil,
+}
+```
+
+The `List` type is recursive because the `Cons` variant contains a reference to itself. The `Cons` variant contains an `i32` and a `List`. The `List` variant contains no data. This means the size of the `List` type cannot be determined at compile time. This is similar to a linked list in C.
+
+This is where `Box` comes in. It is a smart pointer type that is used to store data on the heap. For example ...
+
+```
+enum List {
+    Cons(i32, Box<List>),
+    Nil,
+}
+
+use crate::List::{Cons, Nil};
+
+fn main() {
+
+    // Create an empty list 
+    let empty_list = List::Nil;
+
+    // Create a list with one element
+    let one_list = Cons(1, Box::new(Nil));
+
+    // Create a list with three elements
+    let three_list = Cons(1, Box::new(Cons(2, Box::new(Cons(3, Box::new(Nil))))));
+}
+```
+
+Here, the `Cons` variant contains an `i32` and a `Box<List>`. The `Box<List>` is a pointer to a `List` type. The `Box<List>` is stored on the heap. The `Box<List>` is a smart pointer because it contains metadata and capabilities. 
+
+### Deref
+
+The `Deref` trait allows us to customize the behavior of the dereference operator, `*`. For example ...
+
+```
+use std::ops::Deref;
+
+struct MyBox<T>(T);
+
+impl<T> MyBox<T> {
+    fn new(x: T) -> MyBox<T> {
+        MyBox(x)
+    }
+}
+
+impl<T> Deref for MyBox<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        &self.0
+    }
+}
+
+fn main() {
+    let x = 5;
+    let y = MyBox::new(x);
+
+    assert_eq!(5, x);
+    assert_eq!(5, *y);
+}
+```
+
+Here, the `MyBox` type is a tuple struct that wraps a value of any type. The `MyBox` type implements the `Deref` trait. The `Deref` trait requires us to implement one method named `deref` that borrows `self` and returns a reference to the inner data. 
+
+The `deref` method returns a reference to the value we want to access with the `*` operator. This allows us to call the `*` operator on a `MyBox<T>` value. 
+
+### Cow 
+
+The `Cow`, or Clone-On-Write pointer, can be explored in greater detail [here](https://doc.rust-lang.org/std/borrow/enum.Cow.html). It is a smart pointer that wraps an immutable value. If the value is mutated, then the `Cow` type will clone the value and return a mutable reference to the cloned value. 
+
+This is useful when we want to avoid cloning data until we need to mutate it. For example ...
+
+```
+use std::borrow::Cow;
+
+fn abs_all(input: &mut Cow<[i32]>) {
+    for i in 0..input.len() {
+        let v = input[i];
+        if v < 0 {
+            // Clones into a vector if not already owned.
+            input.to_mut()[i] = -v;
+        }
+    }
+}
+
+fn main() {
+    let slice = [0, 1, 2];
+    let mut input = Cow::from(&slice[..]);
+    abs_all(&mut input);
+    assert_eq!(input, Cow::Borrowed([0, 1, 2]));
+
+    let slice = [-1, 0, 1];
+    let mut input = Cow::from(&slice[..]);
+    abs_all(&mut input);
+    assert_eq!(input, Cow::Owned([1, 0, 1]));
+}
+```
+
+Here, we have a function that takes a mutable reference to a `Cow<[i32]>`. The `Cow` type is an enum that can be either `Borrowed` or `Owned`. The `Borrowed` variant contains a reference to a slice, while the `Owned` variant contains a vector.
+### Rc
+
+The `Rc` type is a reference-counting pointer. "Rc" stands for "Reference Counted," and it provides a way to share ownership of a value between multiple variables. For instance, we can create a struct and give ownership of the struct to two variables. 
+
+```
+struct Person {
+    name: Rc<String>,
+}
+
+fn main() {
+    let name = Rc::new(String::from("John Doe"));
+
+    let person1 = Person { name: name.clone() };
+    let person2 = Person { name: name.clone() };
+
+    println!("Name: {}", name);
+}
+```
+
+Here, we need to implement `Rc` because we want to share ownership of the `String` data rather than transferring ownership. The `Rc` type keeps track of the number of references to the data. If there are zero references, the data can be cleaned up without any problems. 
+
+`Rc` is different from `Arc` because `Rc` is not thread-safe. This means we cannot share an `Rc` type between threads, only between variables in the same thread.
+
+## Section 22 - Macros
+
+Macros are a way to write code that writes other code, which is known as metaprogramming. Macros are useful for reducing boilerplate code. To learn about this more exhaustively, take a look at these [exercises](https://github.com/tfpk/macrokata). 
+
+Macros are really useful for writing domain-specific languages (DSLs). A DSL is a small language that is embedded in Rust for a specific purpose. For example, the `vec!` macro is used to create a `Vec<T>` from a list of elements. 
+
+Macros need to be defined before the `main()` function is called. This is because macros are expanded (i.e the code is generated and inserted into the code) before the compiler starts compiling the code. This means that macros cannot be defined in the `main()` function.
+
+There are a few different types of macros in Rust. 
+
+### Declarative Macros: 
+
+These are the most common type of macros. They are also called "macros by example" because they are similar to functions. They are declared with the `macro_rules!` macro. For instance ... 
+
+```
+macro_rules! vec {
+    ( $( $x:expr ),* ) => {
+        {
+            let mut temp_vec = Vec::new();
+            $(
+                temp_vec.push($x);
+            )*
+            temp_vec
+        }
+    };
+}
+
+fn main() {
+    let v: Vec<u32> = vec![1, 2, 3];
+    println!("{:?}", v);
+}
+```
+
+Here, we have a macro that creates a `Vec<T>` from a list of elements. The macro is declared with `macro_rules!` and the name of the macro. The macro takes a list of elements and pushes them onto a vector.
+
+### Procedural Macros
+
+These are macros that accept and manipulate Rust code. They are called procedural macros because they operate on the abstract syntax tree (AST) of the code. Procedural macros are more powerful than declarative macros, but they are also more difficult to implement. 
+
+For example, the `#[derive]` attribute is a procedural macro. It allows us to implement a trait on a struct or enum. 
+
+```
+#[derive(Debug)]
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+fn main() {
+    let p = Point { x: 0, y: 0 };
+    println!("{:?}", p);
+}
+```
+
+Here, we derive the `Debug` trait on the `Point` struct. This allows us to print the `Point` struct with `println!`. 
+
+### Attribute-like Macros
+
+Attribute-like macros are similar to declarative macros, but they are used as annotations for functions, structs, and other items. For example, the `#[test]` attribute is used to mark a function as a test. 
+
+This is different from a procedural macro because it does not operate on the AST, and is instead used as metadata for the item. 
+
+```
+#[test]
+fn it_works() {
+    assert_eq!(2 + 2, 4);
+}
+```
+
+Here, we have a function that is marked with the `#[test]` attribute. This function will be run when we run `cargo test`.
+
+### Calling Macros in Path 
+
+Macros can be exported to path by using the `#[macro_export]` attribute. This allows us to call the macro from other modules. For example ...
+
+```
+mod my_mod {
+    #[macro_export]
+    macro_rules! vec {
+        ( $( $x:expr ),* ) => {
+            {
+                let mut temp_vec = Vec::new();
+                $(
+                    temp_vec.push($x);
+                )*
+                temp_vec
+            }
+        };
+    }
+}
+
+fn main() {
+    let v: Vec<u32> = my_mod::vec![1, 2, 3];
+    println!("{:?}", v);
+}
+```
+
+### Formatting Rust Code
+
+`#[rustfmt::skip]` is an attribute that tells the Rust compiler to skip formatting the code. This is useful when we want to write code that is not formatted. 
+
+```
+#[rustfmt::skip]
+fn main() {
+    println!("Hello, world!");
+}
+```
+
+## Section 23 - Clippy For Linting
+
+Clippy is a tool that is used to lint Rust code. It is a collection of lints that are used to catch common mistakes and improve the quality of the code.
+
+To use Clippy, we need to add it to our `Cargo.toml` file. 
+
+```
+[dependencies]
+clippy = "0.0.212"
+```
+
+Then, we can run `cargo clippy` to run Clippy on our code.
+
+## Section 24 - Conversions 
+
+Rust provides a few different traits for converting between types. These traits are `From`, `Into`, `TryFrom`, and `TryInto`. 
+
+The simplest form of type conversion is a type cast expression. It is denoted with the binary operator `as`. For instance, `println!("{}", 1 + 1.0);` would not compile, since `1` is an integer while `1.0` is a float. However, `println!("{}", 1 as f32 + 1.0)` should compile. The exercise [`using_as`](using_as.rs) tries to cover this.
+
+### From and Into
+
+The `From` and `Into` traits are used to convert between types. 
+
+```
+struct Person {
+    name: String,
+}
+
+impl From<&str> for Person {
+    fn from(s: &str) -> Self {
+        Person {
+            name: s.to_string(),
+        }
+    }
+}
+
+fn main() {
+    let p = Person::from("John Doe");
+    println!("Name: {}", p.name);
+}
+```
+
+Here, we implement the `From` trait for the `Person` struct. This allows us to convert from a `&str` to a `Person` struct.
+
+The `Into` trait is the opposite of the `From` trait. It is implemented for types that can be converted into another type. 
+
+```
+struct Person {
+    name: String,
+}
+
+impl Into<String> for Person {
+    fn into(self) -> String {
+        self.name
+    }
+}
+
+fn main() {
+    let p = Person {
+        name: String::from("John Doe"),
+    };
+    let s: String = p.into();
+    println!("Name: {}", s);
+}
+```
+
+Here, we implement the `Into` trait for the `Person` struct. This allows us to convert from a `Person` struct to a `String`.
+
+### TryFrom and TryInto
+
+The `TryFrom` and `TryInto` traits are similar to the `From` and `Into` traits, but they are used for fallible conversions. This means that the conversion can fail. 
+
+```
+use std::convert::TryFrom;
+
+#[derive(Debug)]
+struct Person {
+    name: String,
+}
+
+impl TryFrom<&str> for Person {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        if value.len() > 0 {
+            Ok(Person {
+                name: value.to_string(),
+            })
+        } else {
+            Err("Empty string".to_string())
+        }
+    }
+}
+
+fn main() {
+    let p = Person::try_from("John Doe").unwrap();
+    println!("Name: {}", p.name);
+}
+```
+
+Here, we implement the `TryFrom` trait for the `Person` struct. This allows us to convert from a `&str` to a `Person` struct. However, the conversion can fail if the string is empty.
+
+The `TryInto` trait is the opposite of the `TryFrom` trait. It is implemented for types that can be converted into another type. 
+
+```
+use std::convert::TryInto;
+
+#[derive(Debug)]
+struct Person {
+    name: String,
+}
+
+impl TryInto<String> for Person {
+    type Error = String;
+
+    fn try_into(self) -> Result<String, Self::Error> {
+        if self.name.len() > 0 {
+            Ok(self.name)
+        } else {
+            Err("Empty string".to_string())
+        }
+    }
+}
+
+fn main() {
+    let p = Person {
+        name: String::from("John Doe"),
+    };
+    let s: String = p.try_into().unwrap();
+    println!("Name: {}", s);
+}
+```
+
+Here, we implement the `TryInto` trait for the `Person` struct. This allows us to convert from a `Person` struct to a `String`. However, the conversion can fail if the string is empty.
+
+### AsRef and AsMut
+
+The `AsRef` and `AsMut` traits are used to convert between references. 
+
+```
+use std::convert::AsRef;
+
+struct Person {
+    name: String,
+}
+
+impl AsRef<str> for Person {
+    fn as_ref(&self) -> &str {
+        &self.name
+    }
+}
+
+fn main() {
+    let p = Person {
+        name: String::from("John Doe"),
+    };
+    println!("Name: {}", p.as_ref());
+}
+```
+
+Here, we implement the `AsRef` trait for the `Person` struct. This allows us to convert from a `Person` struct to a `&str`.
+
+The `AsMut` trait is the opposite of the `AsRef` trait. It is implemented for types that can be converted into another type. 
+
+```
+use std::convert::AsMut;
+
+struct Person {
+    name: String,
+}
+
+impl AsMut<String> for Person {
+    fn as_mut(&mut self) -> &mut String {
+        &mut self.name
+    }
+}
+
+fn main() {
+    let mut p = Person {
+        name: String::from("John Doe"),
+    };
+    p.as_mut().push_str(" Jr.");
+    println!("Name: {}", p.name);
+}
+```
+
+Here, we implement the `AsMut` trait for the `Person` struct. This allows us to convert from a `Person` struct to a `&mut String`.
 
