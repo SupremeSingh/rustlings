@@ -398,6 +398,21 @@ input.to_string() + " " + world
 input.replace("cars", "balloons").to_string()
 ```
 
+Moreover, 2 strings can be concatenated using the `+` operator. For example ...
+
+```
+let hello = "Hello ".to_string();
+let world = "world!";
+let hello_world = hello + world;
+```
+
+Note, the string to be concatenated must be a borrowed reference. Finally, Rust has a `format!` macro that allows you to create a string from a mix of variables and string literals. For example ...
+
+```
+let name = "John";
+let age = 30;
+let s = format!("My name is {} and I am {} years old.", name, age);
+```
 ## Section 11 - Modules
 
 Rust organizes code using a [module system](https://doc.rust-lang.org/book/ch07-00-managing-growing-projects-with-packages-crates-and-modules.html). This system allows you to group related code together in a module, and then use that module in other parts of your program. 
